@@ -3,73 +3,79 @@ from google import genai
 from google.genai import types
 from pypdf import PdfReader
 import json
-import re
 
-# 1. CONFIGURACIÓN DE LA PÁGINA (Estilo Ancho y Clínico)
+# 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(
-    page_title="Evaluador Médico de Élite",
+    page_title="Simulador Renal e Integración Médica",
     page_icon="🩺",
     layout="wide"
 )
 
-# Estilos CSS para el fondo oscuro caricaturizado/amigable
+# Estilos visuales oscuros premium
 st.markdown("""
     <style>
     .main { 
         background-color: #0f172a; 
         background-image: radial-gradient(circle, rgba(13, 148, 136, 0.15) 0%, transparent 80%);
     }
-    div[data-testid="stExpander"] { background-color: #1e293b; border-radius: 10px; }
+    div[data-testid="stChatMessage"] { border-radius: 12px; padding: 15px; margin-bottom: 10px; }
+    div[data-testid="stChatMessageAssistant"] { background-color: #1e293b; border-left: 5px solid #0d9488; }
+    div[data-testid="stChatMessageUser"] { background-color: #0284c7; }
     </style>
     """, unsafe_allow_html=True)
 
 # Banner Principal
 st.markdown(
     """
-    <div style="background-color: #1e293b; padding: 30px; border-radius: 15px; border-left: 8px solid #0d9488; margin-bottom: 25px; text-align:center;">
-        <h1 style="color: #ffffff; margin: 0; font-family: 'Segoe UI', sans-serif;">🩺 Sistema de Simulacros Médicos Interactivos</h1>
-        <p style="color: #38bdf8; margin: 5px 0 0 0; font-size: 16px;">Anatomía Renal, Fisiología Excretora y Correlación Clínica Avanzada</p>
+    <div style="background-color: #1e293b; padding: 25px; border-radius: 15px; border-left: 8px solid #0d9488; margin-bottom: 25px; text-align:center;">
+        <h1 style="color: #ffffff; margin: 0; font-family: 'Segoe UI', sans-serif;">🩺 Plataforma de Evaluación Médica Adaptativa</h1>
+        <p style="color: #38bdf8; margin: 5px 0 0 0; font-size: 15px;">Simulacros de Fisiología Renal, Aparato Excretor y Casos de Alto Rendimiento</p>
     </div>
     """, 
     unsafe_allow_html=True
 )
 
-# Imágenes estables de apoyo (Esquema médico / Ilustración)
+# Cabecera gráfica con imágenes estables de banco médico
 col_img1, col_img2 = st.columns(2)
 with col_img1:
-    st.markdown("#### 🔬 Estructura Macroscópica Renal")
-    st.image("https://images.unsplash.com/photo-1530026405186-ed1ea0ac7a63?auto=format&fit=crop&w=600&q=80", caption="Riñón Humano - Filtración y Perfusión")
+    st.image("https://images.unsplash.com/photo-1530026405186-ed1ea0ac7a63?auto=format&fit=crop&w=500&q=80", caption="Anatomía Macrovascular Renal")
 with col_img2:
-    st.markdown("#### 🧬 Unidad Funcional Glomerular")
-    st.image("https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=600&q=80", caption="Microscopía y Análisis de Nefrona")
+    st.image("https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=500&q=80", caption="Fisiología Molecular de la Nefrona")
 
 st.markdown("---")
 
-# 2. CONFIGURACIÓN DE LA API KEY
+# 2. CONFIGURACIÓN DE LA API KEY (Google Secrets)
 if "GENAI_API_KEY" in st.secrets:
     api_key = st.secrets["GENAI_API_KEY"]
 else:
     api_key = st.sidebar.text_input("Ingresa tu Gemini API Key:", type="password")
 
 if not api_key:
-    st.info("Por favor, introduce tu API Key para comenzar.")
+    st.info("Por favor, configura tu GENAI_API_KEY en Streamlit Secrets para activar la app.")
     st.stop()
 
 client = genai.Client(api_key=api_key)
 
-# 3. CONTROL DE ESTADOS (Para evitar que se borre el examen al marcar)
+# Inicialización de estados de memoria
 if "document_text" not in st.session_state:
     st.session_state["document_text"] = ""
-if "banco_preguntas" not in st.session_state:
-    st.session_state["banco_preguntas"] = []
+if "chat_history" not in st.session_state:
+    st.session_state["chat_history"] = []
 
-# 4. INTERFAZ DE CONFIGURACIÓN "A PEDIDO"
-c1, c2 = st.columns([2, 1])
-
+# 3. INTERFAZ DE CONTROL Y CONFIGURACIÓN MULTI-MODO
+c1, c2, c3 = st.columns([2, 1, 1])
 with c1:
-    uploaded_files = st.file_uploader("📂 Sube tus PDFs médicos (Clases, Guías, etc.):", type=["pdf", "txt"], accept_multiple_files=True)
+    st.markdown("##### 📂 1. Carga tus PDFs de Clase")
+    uploaded_files = st.file_uploader("Arrastra aquí tus archivos médicos:", type=["pdf", "txt"], accept_multiple_files=True)
 with c2:
-    num_preguntas = st.number_input("🔢 ¿Cuántas preguntas deseas en este simulacro?", min_value=1, max_value=20, value=5)
+    st.markdown("##### 🧠 2. Elige el Enfoque")
+    tipo_examen = st.selectbox(
+        "Selecciona el estilo de preguntas:",
+        ["Casos Clínicos de Integración (Pro)", "Conceptos Clave y Memorísticos (Directo)"]
+    )
+with c3:
+    st.markdown("##### 🔢 3. Extensión")
+    num_preguntas = st.number_input("Cantidad de preguntas:", min_value=1, max_value=30, value=10)
 
 def extraer_texto(files):
     texto = ""
@@ -84,90 +90,107 @@ def extraer_texto(files):
 
 if uploaded_files and not st.session_state["document_text"]:
     st.session_state["document_text"] = extraer_texto(uploaded_files)
-    st.toast("¡Documentos médicos procesados con éxito!", icon="✅")
+    st.toast("¡Base de datos médica lista para procesar!", icon="✅")
 
-# Botón para generar el simulacro interactivo forzando JSON
-if st.button("🚀 Generar Simulacro Interactivo"):
-    if not st.session_state["document_text"]:
-        st.warning("Primero sube tus PDFs de estudio.")
-    else:
-        with st.spinner("🧬 Forjando casos clínicos y estructurando alternativas..."):
-            PROMPT_JSON = f"""
-            Eres un evaluador médico de élite. Analiza los documentos proporcionados y genera exactamente {num_preguntas} casos clínicos sobre el aparato excretor y fisiología renal.
-            Cruza datos de: Antecedentes, Fármacos usados, y Perfil de Laboratorio completo (Valores séricos y urinarios con unidades oficiales).
-            
-            DEBES responder ÚNICAMENTE con un arreglo JSON puro, sin markdown, sin texto extra.
-            Formato del JSON exacto:
-            [
-              {{
-                "id": 1,
-                "caso": "Paciente varón de...",
-                "opciones": {{"A": "Texto A", "B": "Texto B", "C": "Texto C", "D": "Texto D"}},
-                "correcta": "A",
-                "porque_si": "Explicación detallada de por qué esta es la correcta...",
-                "porque_no": "Explicación de por qué las otras son incorrectas..."
-              }}
-            ]
-            
-            Documento base: {st.session_state["document_text"]}
-            """
-            try:
-                response = client.models.generate_content(
-                    model='gemini-2.5-flash',
-                    contents=PROMPT_JSON
-                )
-                
-                raw_text = response.text.strip()
-                clean_json = re.sub(r'^```json\s*|```$', '', raw_text, flags=re.MULTILINE).strip()
-                st.session_state["banco_preguntas"] = json.loads(clean_json)
-                st.success("¡Simulacro interactivo construido! Responde abajo.")
-            except Exception as e:
-                st.error(f"Error al estructurar las preguntas. Intenta darle al botón otra vez.")
+st.markdown("---")
+st.markdown("### 💬 Entrenador Médico Activo")
 
-# 5. RENDERIZADO DEL EXAMEN INTERACTIVO CON FEEDBACK VERDE / ROJO
-if st.session_state["banco_preguntas"]:
-    st.markdown("## 📝 EXAMEN DE INTEGRACIÓN CLÍNICA")
+# 4. FUSIÓN DINÁMICA DE TUS DOS PROMPTS DE ÉLITE
+PROMPT_SISTEMA_HIBRIDO = f"""
+Eres un asistente académico de élite, experto en pedagogía médica y ciencias de la salud. Tu única función es analizar los PDFs o documentos de la clase proporcionados por el usuario y generar un BANCO DE PREGUNTAS DE OPCIÓN MÚLTIPLE (exactamente {num_preguntas} preguntas, o las que el usuario te pida), utilizando la herramienta "Grounding with Google Search" para asegurar la máxima precisión científica.
+
+Dependiendo de la selección del alumno, moldearás el diseño de evaluación siguiendo estrictamente uno de los siguientes dos enfoques:
+
+---
+[SI EL ALUMNO PIDE: "Casos Clínicos de Integración (Pro)"]
+REGLAS DE DISEÑO:
+Cada caso clínico debe estar recontra detallado y obligatoriamente debe integrar:
+1. ANTECEDENTES Y FÁRMACOS: El paciente debe presentar un historial médico relevante y el uso de medicamentos específicos (ej. diuréticos, antihipertensivos, AINEs, etc.) que alteren la fisiología normal.
+2. PERFIL DE LABORATORIO COMPLETO: Valores séricos y urinarios pertinentes al caso (ej. electrolitos como Na+, K+, Cl-, Ca2+, gases arteriales como pH, pCO2, HCO3-, o marcadores como creatinina, urea, osmolaridad, etc.) con sus respectivas unidades de medida oficiales.
+3. CORRELACIÓN MULTIVARIABLE: Las preguntas deben obligar al usuario a relacionar cómo el fármaco o la alteración estructural (histología/anatomía) explica los resultados de laboratorio y las manifestaciones clínicas del paciente (fisiopatología).
+
+REGLA DE ORO DE FORMATO:
+1. SIMULACRO LIMPIO: Presenta primero TODO el banco de casos de corrido con sus opciones (A, B, C, D). NO muestres respuestas ni resolución debajo de cada caso.
+2. SOLUCIONARIO EXPLICATIVO AL FINAL: Al final de todo el mensaje, coloca una sección oculta usando <details><summary><b>🔑 SOLUCIONARIO RAZONADO (INTEGRACIÓN)</b></summary>...</details> detallando el mecanismo fisiológico integrado, sustento de internet y fuentes.
+
+---
+[SI EL ALUMNO PIDE: "Conceptos Clave y Memorísticos (Directo)"]
+REGLAS DE DISEÑO:
+Las preguntas deben ser directas, conceptuales y memorísticas (ej. "¿Qué molécula...?", "¿Cuál es el valor de...?", "¿Cuál es el canal responsable de...?"), basándose fielmente en el PDF de la clase pero utilizando internet para validar la precisión de las constantes biológicas o moleculares.
+
+REGLA DE ORO DE FORMATO:
+1. CUESTIONARIO LIMPIO: Presenta primero TODO el banco de preguntas de corrido, una detrás de otra, con sus opciones (A, B, C, D). Sin spoilers.
+2. CLAVE DE RESPUESTAS AL FINAL: Al final de todo el mensaje, coloca una sección oculta usando <details><summary><b>🔑 HOJA DE RESPUESTAS (CORRECCIÓN)</b></summary>...</details> detallando la justificación de la clave y su respectiva fuente bibliográfica médica.
+"""
+
+# 5. RENDERIZADO DEL CHAT
+for message in st.session_state["chat_history"]:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+
+# 6. CAPTURA DE ENTRADA Y DISPARO DIRECTO
+RECOMENDACION_TEXTO = f"Genera un bloque de {num_preguntas} preguntas bajo el enfoque de {tipo_examen}"
+
+if user_input := st.chat_input(f"Pídele el cuestionario aquí (Ej: '{RECOMENDACION_TEXTO}')"):
     
-    for q in st.session_state["banco_preguntas"]:
-        q_id = str(q["id"])
-        
-        with st.container():
-            st.markdown(f"### Caso Clínico {q_id}")
-            st.info(q["caso"])
+    if not st.session_state["document_text"]:
+        st.warning("Por favor, sube primero los documentos médicos en la zona superior.")
+    else:
+        st.session_state["chat_history"].append({"role": "user", "content": user_input})
+        with st.chat_message("user"):
+            st.write(user_input)
             
-            opciones_lista = [
-                f"A) {q['opciones']['A']}", 
-                f"B) {q['opciones']['B']}", 
-                f"C) {q['opciones']['C']}", 
-                f"D) {q['opciones']['D']}"
-            ]
-            
-            opcion_elegida = st.radio(
-                f"Selecciona tu respuesta para el Caso {q_id}:",
-                options=["Sin responder"] + opciones_lista,
-                key=f"radio_{q_id}"
-            )
-            
-            if opcion_elegida != "Sin responder":
-                letra_elegida = opcion_elegida[0]
-                
-                if letra_elegida == q["correcta"]:
-                    st.markdown(
-                        f"""
-                        <div style="background-color: #dcfce7; color: #15803d; padding: 15px; border-radius: 8px; border: 2px solid #22c55e; margin-top: 10px;">
-                            <strong style="font-size: 18px;">✅ ¡CORRECTO! Marcaste la opción {q['correcta']}</strong><br><br>
-                            <b>Fisiopatología de la respuesta:</b> {q['porque_si']}
-                        </div>
-                        """, unsafe_allow_html=True
+        with st.chat_message("assistant"):
+            with st.spinner("🧬 Cruzando datos bibliográficos y estructurando el bloque de evaluación..."):
+                try:
+                    # Inyectamos el modo seleccionado directamente en el contexto para asegurar cero desvíos
+                    contexto_peticion = (
+                        f"[MODO DE EVALUACIÓN ACTIVADO POR EL ALUMNO]: {tipo_examen}\n"
+                        f"Texto extraído de los PDFs cargados:\n{st.session_state['document_text']}\n\n"
+                        f"Instrucción actual: {user_input}"
                     )
-                else:
-                    st.markdown(
-                        f"""
-                        <div style="background-color: #fee2e2; color: #b91c1c; padding: 15px; border-radius: 8px; border: 2px solid #ef4444; margin-top: 10px;">
-                            <strong style="font-size: 18px;">❌ INCORRECTO. Marcaste la {letra_elegida} (La correcta era la {q['correcta']})</strong><br><br>
-                            <b>¿Por qué fallaste?:</b> {q['porque_no']}<br><br>
-                            <b>Sustento Fisiológico de la clave correcta:</b> {q['porque_si']}
-                        </div>
-                        """, unsafe_allow_html=True
+                    
+                    response = client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=contexto_peticion,
+                        config=types.GenerateContentConfig(
+                            system_instruction=PROMPT_SISTEMA_HIBRIDO
+                        )
                     )
-            st.markdown("<br><hr style='border-top: 1px dashed #cccccc;'><br>", unsafe_allow_html=True)
+                    
+                    respuesta_texto = response.text
+                    st.write(respuesta_texto)
+                    st.session_state["chat_history"].append({"role": "assistant", "content": respuesta_texto})
+                    
+                except Exception as e:
+                    st.error(f"Error en los servidores de Google: {e}")
+
+# 7. TABLERO DE RESPUESTAS RÁPIDAS
+if st.session_state["chat_history"]:
+    st.markdown("---")
+    st.markdown("### 🎛️ Tablero Interactivo de Respuestas")
+    st.write("Comprueba rápido tus alternativas del simulacro impreso arriba:")
+    
+    col_check1, col_check2 = st.columns([1, 2])
+    with col_check1:
+        letra = st.pills("Tu alternativa:", ["A", "B", "C", "D"])
+        estado = st.toggle("¿Coincide con el solucionario oculto?")
+    
+    with col_check2:
+        if letra:
+            if estado:
+                st.markdown(
+                    f"""
+                    <div style="background-color: #dcfce7; color: #15803d; padding: 15px; border-radius: 8px; border: 2px solid #22c55e;">
+                        <strong>✅ ¡Excelente! La opción {letra} es correcta.</strong> La correlación molecular está bien fijada.
+                    </div>
+                    """, unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    f"""
+                    <div style="background-color: #fee2e2; color: #b91c1c; padding: 15px; border-radius: 8px; border: 2px solid #ef4444;">
+                        <strong>❌ La opción {letra} es incorrecta.</strong> Despliega la pestaña del solucionario arriba para repasar el fundamento clínico.
+                    </div>
+                    """, unsafe_allow_html=True
+                )
