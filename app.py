@@ -102,8 +102,8 @@ if uploaded_files and st.session_state["chat_gemini"] is None:
             """
 
             # Inicializamos el modelo con tu prompt inyectado nativamente
-            model = genai.GenerativeModel(
-    model_name='models/gemini-1.5-flash',
+ model = genai.GenerativeModel(
+    model_name='gemini-2.5-flash',
     system_instruction=PROMPT_SISTEMA
 )
             
