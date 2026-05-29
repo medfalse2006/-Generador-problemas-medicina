@@ -2,7 +2,6 @@ import streamlit as st
 from google import genai
 from google.genai import types
 from pypdf import PdfReader
-import json
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(
@@ -18,9 +17,7 @@ st.markdown("""
         background-color: #0f172a; 
         background-image: radial-gradient(circle, rgba(13, 148, 136, 0.15) 0%, transparent 80%);
     }
-    div[data-testid="stChatMessage"] { border-radius: 12px; padding: 15px; margin-bottom: 10px; }
-    div[data-testid="stChatMessageAssistant"] { background-color: #1e293b; border-left: 5px solid #0d9488; }
-    div[data-testid="stChatMessageUser"] { background-color: #0284c7; }
+    div[data-testid="stExpander"] { background-color: #1e293b; border-radius: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -59,8 +56,8 @@ client = genai.Client(api_key=api_key)
 # Inicialización de estados de memoria
 if "document_text" not in st.session_state:
     st.session_state["document_text"] = ""
-if "chat_history" not in st.session_state:
-    st.session_state["chat_history"] = []
+if "resultado_simulacro" not in st.session_state:
+    st.session_state["resultado_simulacro"] = ""
 
 # 3. INTERFAZ DE CONTROL Y CONFIGURACIÓN MULTI-MODO
 c1, c2, c3 = st.columns([2, 1, 1])
@@ -93,7 +90,6 @@ if uploaded_files and not st.session_state["document_text"]:
     st.toast("¡Base de datos médica lista para procesar!", icon="✅")
 
 st.markdown("---")
-st.markdown("### 💬 Entrenador Médico Activo")
 
 # 4. FUSIÓN DINÁMICA DE TUS DOS PROMPTS DE ÉLITE
 PROMPT_SISTEMA_HIBRIDO = f"""
@@ -123,50 +119,41 @@ REGLA DE ORO DE FORMATO:
 2. CLAVE DE RESPUESTAS AL FINAL: Al final de todo el mensaje, coloca una sección oculta usando <details><summary><b>🔑 HOJA DE RESPUESTAS (CORRECCIÓN)</b></summary>...</details> detallando la justificación de la clave y su respectiva fuente bibliográfica médica.
 """
 
-# 5. RENDERIZADO DEL CHAT
-for message in st.session_state["chat_history"]:
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
-
-# 6. CAPTURA DE ENTRADA Y DISPARO DIRECTO
-RECOMENDACION_TEXTO = f"Genera un bloque de {num_preguntas} preguntas bajo el enfoque de {tipo_examen}"
-
-if user_input := st.chat_input(f"Pídele el cuestionario aquí (Ej: '{RECOMENDACION_TEXTO}')"):
-    
+# 5. BOTÓN DE DISPARO DIRECTO (REEMPLAZA AL CHAT INPUT REDUNDANTE)
+st.markdown("### 🧬 Panel de Ejecución")
+if st.button("🚀 Generar Simulacro Personalizado", type="primary", use_container_width=True):
     if not st.session_state["document_text"]:
         st.warning("Por favor, sube primero los documentos médicos en la zona superior.")
     else:
-        st.session_state["chat_history"].append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.write(user_input)
-            
-        with st.chat_message("assistant"):
-            with st.spinner("🧬 Cruzando datos bibliográficos y estructurando el bloque de evaluación..."):
-                try:
-                    # Inyectamos el modo seleccionado directamente en el contexto para asegurar cero desvíos
-                    contexto_peticion = (
-                        f"[MODO DE EVALUACIÓN ACTIVADO POR EL ALUMNO]: {tipo_examen}\n"
-                        f"Texto extraído de los PDFs cargados:\n{st.session_state['document_text']}\n\n"
-                        f"Instrucción actual: {user_input}"
+        with st.spinner("🧬 Cruzando datos bibliográficos y estructurando tu bloque de evaluación..."):
+            try:
+                contexto_peticion = (
+                    f"[MODO DE EVALUACIÓN ACTIVADO POR EL ALUMNO]: {tipo_examen}\n"
+                    f"Texto extraído de los PDFs cargados:\n{st.session_state['document_text']}\n\n"
+                    f"Instrucción actual: Genera el bloque completo de {num_preguntas} preguntas."
+                )
+                
+                response = client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=contexto_peticion,
+                    config=types.GenerateContentConfig(
+                        system_instruction=PROMPT_SISTEMA_HIBRIDO
                     )
-                    
-                    response = client.models.generate_content(
-                        model='gemini-2.5-flash',
-                        contents=contexto_peticion,
-                        config=types.GenerateContentConfig(
-                            system_instruction=PROMPT_SISTEMA_HIBRIDO
-                        )
-                    )
-                    
-                    respuesta_texto = response.text
-                    st.write(respuesta_texto)
-                    st.session_state["chat_history"].append({"role": "assistant", "content": respuesta_texto})
-                    
-                except Exception as e:
-                    st.error(f"Error en los servidores de Google: {e}")
+                )
+                
+                st.session_state["resultado_simulacro"] = response.text
+                
+            except Exception as e:
+                st.error(f"Error en los servidores de Google: {e}")
+
+# 6. MOSTRAR EL EXAMEN IMPRESO EN PANTALLA
+if st.session_state["resultado_simulacro"]:
+    st.markdown("---")
+    st.markdown("### 📝 TU SIMULACRO GENERADO")
+    st.write(st.session_state["resultado_simulacro"])
 
 # 7. TABLERO DE RESPUESTAS RÁPIDAS
-if st.session_state["chat_history"]:
+if st.session_state["resultado_simulacro"]:
     st.markdown("---")
     st.markdown("### 🎛️ Tablero Interactivo de Respuestas")
     st.write("Comprueba rápido tus alternativas del simulacro impreso arriba:")
