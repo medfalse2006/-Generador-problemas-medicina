@@ -103,9 +103,9 @@ if uploaded_files and st.session_state["chat_gemini"] is None:
 
             # Inicializamos el modelo con tu prompt inyectado nativamente
             model = genai.GenerativeModel(
-                model_name='gemini-1.5-flash',
-                system_instruction=PROMPT_SISTEMA
-            )
+    model_name='models/gemini-1.5-flash',
+    system_instruction=PROMPT_SISTEMA
+)
             
             # Iniciamos el chat y le entregamos todos los documentos juntos en el primer turno
             st.session_state["chat_gemini"] = model.start_chat(history=[
